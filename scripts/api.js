@@ -1,49 +1,102 @@
-const apiKey = 'DCRVFU2ALH2LOHIO';
-const symbol = 'AAPL'; // Example: Apple Inc.
-const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&apikey=${apiKey}`;
+// Variables
+const apiKey = "TXS6SZYV5P87XSY8";
+const ctx = document.querySelector("#myChart").getContext("2d");
 
-fetch(url)
-    .then(response => response.json())
-    .then(data => {
-        const timeSeries = data['Time Series (Daily)'];
-        const dates = Object.keys(timeSeries);
-        const closingPrices = dates.map(date => timeSeries[date]['4. close']);
-
-        const ctx = document.getElementById('stockChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: dates,
-                datasets: [{
-                    label: 'Closing Price',
-                    data: closingPrices,
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1,
-                    fill: false
-                }]
+// Chart object
+const forexChart = new Chart(ctx, {
+    type: "line",
+    data: {
+        labels: [],
+        datasets: [{
+            label: "EUR to GBP",
+            data: [],
+            borderColor: "green",
+            borderWidth: 1,
+            pointRadius: 0,
+        }],
+    },
+    options: {
+        animation: true,
+        responsive: true,
+        scales: {
+            x: {
+                type: "category",
             },
-            options: {
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: {
-                            unit: 'day'
-                        },
-                        title: {
-                            display: true,
-                            text: 'Date'
-                        }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Closing Price'
-                        }
-                    }
-                }
-            }
-        });
-    })
-    .catch(error => console.error('Error fetching data:', error));
+            y: {
+                beginAtZero: false,
+            },
+        },
+        plugins: {
+            legend: {
+                onClick: null,
+            },
+            decimation: {
+                enabled: true,
+                algorithm: "lttb",
+            },
+        },
+    },
+});
 
+// --------------------------- API Data ---------------------------
+async function fetchForexData() {
+    try {
+        const response = await fetch(`https://www.alphavantage.co/query?function=FX_MONTHLY&from_symbol=EUR&to_symbol=GBP&apikey=${apiKey}`);
+        let data = await response.json();
+        console.log(data);
+
+        // Process API data
+        return processForexData(data);
+    } catch (error) {
+        console.error("Error fetching data:", error);
+        return [];
+    }
+}
+
+function processForexData(data) {
+    let forexData = [];
+
+    if (data["Time Series FX (Monthly)"]) {
+        Object.entries(data["Time Series FX (Monthly)"]).forEach(([date, values]) => {
+            forexData.push({
+                date,
+                price: parseFloat(values["4. close"]),
+            });
+        });
+
+        // Reverse order
+        forexData.reverse();
+    }
+
+    return forexData;
+}
+
+// --------------------------- Chart Animation ---------------------------
+function animateChart(forexData) {
+    let index = 0;
+    const interval = setInterval(() => {
+        if (index >= forexData.length) {
+            clearInterval(interval); // Stop animation when all points are added
+            return;
+        }
+
+        // Add data to chart
+        forexChart.data.labels.push(forexData[index].date);
+        forexChart.data.datasets[0].data.push(forexData[index].price);
+        forexChart.update();
+
+        // Update the GBP and EUR spans
+        document.querySelector("#gbp-span").textContent = "GBP: " + forexData[index].price.toFixed(2);
+        document.querySelector("#eur-span").textContent = "EUR: " + (1 / forexData[index].price).toFixed(2); // Assuming EUR = 1 / GBP
+
+        index++;
+    }, 1000); // Speed
+}
+
+// On click
+document.querySelector("#fetch-data").onclick = async () => {
+    const forexData = await fetchForexData();
+    if (forexData.length > 0) {
+        animateChart(forexData);
+    }
+};
